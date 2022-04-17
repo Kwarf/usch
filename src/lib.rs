@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, time::Instant};
 
 use futures::executor::block_on;
 use winit::{
@@ -17,6 +17,9 @@ mod glsl;
 mod raymarching;
 #[cfg(feature = "hot-reload")]
 mod source_watcher;
+pub mod time;
+#[cfg(feature = "ui")]
+pub mod ui;
 
 pub struct Demo {
     event_loop: EventLoop<()>,
@@ -26,6 +29,8 @@ pub struct Demo {
     surface: wgpu::Surface,
     adapter: wgpu::Adapter,
     scenes: Vec<Scene>,
+    #[cfg(feature = "ui")]
+    ui: Option<ui::Ui>,
 }
 
 impl Demo {
@@ -40,8 +45,14 @@ impl Demo {
         };
         self.surface.configure(&self.device, &config);
 
+        let start_time = Instant::now();
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
+
+            #[cfg(feature = "ui")]
+            self.ui
+                .as_mut()
+                .map(|x| x.handle_event(&start_time.elapsed(), &event));
 
             match event {
                 winit::event::Event::WindowEvent {
@@ -88,8 +99,14 @@ impl Demo {
                             }],
                             depth_stencil_attachment: None,
                         });
+
                         active_scene.draw(&mut rpass);
                     }
+
+                    #[cfg(feature = "ui")]
+                    self.ui.as_mut().map(|x| {
+                        x.draw(&self.window, &self.device, &self.queue, &mut encoder, &view)
+                    });
 
                     self.queue.submit(Some(encoder.finish()));
                     frame.present();
@@ -109,7 +126,7 @@ pub struct Scene {
     pipeline: raymarching::Pipeline,
     #[cfg(feature = "hot-reload")]
     fragment_source_watcher: Option<SourceWatcher>,
-    uniforms: &'static dyn Fn() -> Vec<u8>,
+    uniforms: Box<dyn Fn() -> Vec<u8>>,
 }
 
 impl Scene {

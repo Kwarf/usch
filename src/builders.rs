@@ -1,7 +1,7 @@
 use crate::*;
 
 pub struct DemoBuilder {
-    demo: Demo,
+    pub(super) demo: Demo,
 }
 
 impl DemoBuilder {
@@ -42,6 +42,8 @@ impl DemoBuilder {
                 surface,
                 adapter,
                 scenes: vec![],
+                #[cfg(feature = "ui")]
+                ui: None,
             },
         }
     }
@@ -52,7 +54,7 @@ impl DemoBuilder {
             fragment_source: None,
             #[cfg(feature = "hot-reload")]
             fragment_source_watcher: None,
-            uniforms: &|| vec![],
+            uniforms: Box::new(|| vec![]),
         }));
         self
     }
@@ -67,12 +69,12 @@ pub struct SceneBuilder<'a> {
     fragment_source: Option<&'static str>,
     #[cfg(feature = "hot-reload")]
     fragment_source_watcher: Option<SourceWatcher>,
-    uniforms: &'static dyn Fn() -> Vec<u8>,
+    uniforms: Box<dyn Fn() -> Vec<u8>>,
 }
 
 impl<'a> SceneBuilder<'a> {
-    pub fn with_uniforms(mut self, uniforms: &'static dyn Fn() -> Vec<u8>) -> SceneBuilder<'a> {
-        self.uniforms = uniforms;
+    pub fn with_uniforms(mut self, uniforms: impl Fn() -> Vec<u8> + 'static) -> SceneBuilder<'a> {
+        self.uniforms = Box::new(uniforms);
         self
     }
 
