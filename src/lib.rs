@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use futures::executor::block_on;
-use wgpu::util::DeviceExt;
 use winit::{
     dpi::PhysicalSize,
     event_loop::{ControlFlow, EventLoop},
@@ -9,10 +8,15 @@ use winit::{
 };
 
 pub use builders::DemoBuilder;
+#[cfg(feature = "hot-reload")]
+use source_watcher::SourceWatcher;
 
 mod buffertypes;
 mod builders;
 mod glsl;
+mod raymarching;
+#[cfg(feature = "hot-reload")]
+mod source_watcher;
 
 pub struct Demo {
     event_loop: EventLoop<()>,
@@ -25,7 +29,7 @@ pub struct Demo {
 }
 
 impl Demo {
-    pub fn run(self) {
+    pub fn run(mut self) {
         let size = self.window.inner_size();
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -54,6 +58,16 @@ impl Demo {
                     window_id,
                 } if window_id == self.window.id() => *control_flow = ControlFlow::Exit,
                 winit::event::Event::RedrawRequested(_) => {
+                    let active_scene = self.scenes.first_mut().unwrap();
+
+                    #[cfg(feature = "hot-reload")]
+                    active_scene.reload_shaders_if_requested(
+                        &self.device,
+                        self.surface.get_preferred_format(&self.adapter).unwrap(),
+                    );
+
+                    active_scene.update(&self.queue);
+
                     let frame = self.surface.get_current_texture().unwrap();
                     let view = frame
                         .texture
@@ -74,7 +88,7 @@ impl Demo {
                             }],
                             depth_stencil_attachment: None,
                         });
-                        self.scenes.first().unwrap().draw(&self.queue, &mut rpass);
+                        active_scene.draw(&mut rpass);
                     }
 
                     self.queue.submit(Some(encoder.finish()));
@@ -85,23 +99,50 @@ impl Demo {
             }
         });
     }
+
+    pub fn get_preferred_format(&self) -> wgpu::TextureFormat {
+        self.surface.get_preferred_format(&self.adapter).unwrap()
+    }
 }
 
 pub struct Scene {
-    vertex_buffer: wgpu::Buffer,
-    uniform_bind_group: wgpu::BindGroup,
-    uniform_buffer: wgpu::Buffer,
-    render_pipeline: wgpu::RenderPipeline,
+    pipeline: raymarching::Pipeline,
+    #[cfg(feature = "hot-reload")]
+    fragment_source_watcher: Option<SourceWatcher>,
     uniforms: &'static dyn Fn() -> Vec<u8>,
 }
 
 impl Scene {
-    pub fn draw<'a>(&'a self, queue: &wgpu::Queue, pass: &mut wgpu::RenderPass<'a>) {
-        queue.write_buffer(&self.uniform_buffer, 0, &(self.uniforms)());
+    pub fn update(&self, queue: &wgpu::Queue) {
+        queue.write_buffer(&self.pipeline.uniform_buffer, 0, &(self.uniforms)());
+    }
 
-        pass.set_pipeline(&self.render_pipeline);
-        pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+    pub fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
+        pass.set_pipeline(&self.pipeline.render_pipeline);
+        pass.set_vertex_buffer(0, self.pipeline.vertex_buffer.slice(..));
+        pass.set_bind_group(0, &self.pipeline.uniform_bind_group, &[]);
         pass.draw(0..4, 0..1);
+    }
+
+    #[cfg(feature = "hot-reload")]
+    pub fn reload_shaders_if_requested(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) {
+        match &self.fragment_source_watcher {
+            Some(rx) => match rx.get_new_content() {
+                Some(content) => {
+                    self.pipeline = raymarching::build_pipeline(
+                        device,
+                        format,
+                        wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(&content))),
+                        &(self.uniforms)(),
+                    )
+                }
+                None => (),
+            },
+            None => (),
+        }
     }
 }

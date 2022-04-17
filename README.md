@@ -11,5 +11,5 @@ cargo run --example 01-raymarch
 ### Stage one
 
 - ❌ Support single-scene fragment shader demos ([Raymarching](http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/) e.g.)
-- ❌ Live shader reloading
+- ✅ Live shader reloading
 - ❌ Reasonably deterministic audio playback

@@ -26,6 +26,7 @@ fn main() {
                     .to_vec()
                 })
                 .set_fragment_source(include_str!("shader.frag"))
+                .watch_fragment_source(std::path::Path::new("examples/01-raymarch/shader.frag"))
                 .build()
         })
         .build()

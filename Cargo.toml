@@ -10,3 +10,8 @@ lazy_static = "1.4"
 shaderc = "0.8"
 wgpu = { version = "0.12", features = ["spirv"] }
 winit = "0.26"
+notify = { version = "4.0", optional = true }
+
+[features]
+default = ["hot-reload"]
+hot-reload = ["dep:notify"]

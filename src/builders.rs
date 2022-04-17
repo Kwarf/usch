@@ -1,4 +1,4 @@
-use super::*;
+use crate::*;
 
 pub struct DemoBuilder {
     demo: Demo,
@@ -49,7 +49,9 @@ impl DemoBuilder {
     pub fn scene(mut self, builder: impl Fn(SceneBuilder) -> Scene) -> DemoBuilder {
         self.demo.scenes.push(builder(SceneBuilder {
             demo_builder: &self,
-            fragment_source: "",
+            fragment_source: None,
+            #[cfg(feature = "hot-reload")]
+            fragment_source_watcher: None,
             uniforms: &|| vec![],
         }));
         self
@@ -62,7 +64,9 @@ impl DemoBuilder {
 
 pub struct SceneBuilder<'a> {
     demo_builder: &'a DemoBuilder,
-    fragment_source: &'static str,
+    fragment_source: Option<&'static str>,
+    #[cfg(feature = "hot-reload")]
+    fragment_source_watcher: Option<SourceWatcher>,
     uniforms: &'static dyn Fn() -> Vec<u8>,
 }
 
@@ -73,108 +77,33 @@ impl<'a> SceneBuilder<'a> {
     }
 
     pub fn set_fragment_source(mut self, src: &'static str) -> SceneBuilder<'a> {
-        self.fragment_source = src;
+        self.fragment_source = Some(src);
+        self
+    }
+
+    #[cfg(feature = "hot-reload")]
+    pub fn watch_fragment_source(mut self, path: &std::path::Path) -> SceneBuilder<'a> {
+        self.fragment_source_watcher = Some(SourceWatcher::new(path));
         self
     }
 
     pub fn build(self) -> Scene {
-        let device = &self.demo_builder.demo.device;
+        let demo = &self.demo_builder.demo;
 
-        let vert_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::SpirV(Cow::Borrowed(glsl::vertex_passthrough())),
-        });
-
-        let frag_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(
-                self.fragment_source,
-            ))),
-        });
-
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: &(self.uniforms)(),
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        });
-
-        let uniform_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &uniform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&uniform_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let swapchain_format = self
-            .demo_builder
-            .demo
-            .surface
-            .get_preferred_format(&self.demo_builder.demo.adapter)
-            .unwrap();
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &vert_shader,
-                entry_point: "main",
-                buffers: &[buffertypes::Vertex2D::desc()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &frag_shader,
-                entry_point: "main",
-                targets: &[swapchain_format.into()],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&[
-                buffertypes::Vertex2D::new(-1f32, -1f32),
-                buffertypes::Vertex2D::new(1f32, -1f32),
-                buffertypes::Vertex2D::new(-1f32, 1f32),
-                buffertypes::Vertex2D::new(1f32, 1f32),
-            ]),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let frag = wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(
+            self.fragment_source
+                .expect("No fragment shader source provided"),
+        )));
 
         Scene {
-            vertex_buffer,
-            uniform_bind_group,
-            uniform_buffer,
-            render_pipeline,
+            pipeline: raymarching::build_pipeline(
+                &demo.device,
+                demo.get_preferred_format(),
+                frag,
+                &(self.uniforms)(),
+            ),
+            #[cfg(feature = "hot-reload")]
+            fragment_source_watcher: self.fragment_source_watcher,
             uniforms: self.uniforms,
         }
     }
