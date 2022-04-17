@@ -1,0 +1,12 @@
+[package]
+name = "usch"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = { version = "1.9", features = [ "derive" ] }
+futures = "0.3"
+lazy_static = "1.4"
+shaderc = "0.8"
+wgpu = { version = "0.12", features = ["spirv"] }
+winit = "0.26"
