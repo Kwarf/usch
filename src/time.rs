@@ -4,6 +4,7 @@ pub trait TimeSource {
     fn elapsed(&self) -> Duration;
 }
 
+#[derive(Clone)]
 pub struct SeekableTimeSource {
     base: Instant,
     offset: Duration,

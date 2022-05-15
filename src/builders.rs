@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{*, time::TimeSource};
 
 pub struct DemoBuilder {
     pub(super) demo: Demo,
@@ -33,6 +33,9 @@ impl DemoBuilder {
         ))
         .unwrap();
 
+        #[cfg(feature = "ui")]
+        let ui = ui::Ui::new(&window, &device, surface.get_preferred_format(&adapter).unwrap());
+
         DemoBuilder {
             demo: Demo {
                 event_loop,
@@ -42,8 +45,11 @@ impl DemoBuilder {
                 surface,
                 adapter,
                 scenes: vec![],
+                time: SeekableTimeSource::now(),
                 #[cfg(feature = "ui")]
-                ui: None,
+                tracker: None,
+                #[cfg(feature = "ui")]
+                ui: ui,
             },
         }
     }
@@ -54,7 +60,7 @@ impl DemoBuilder {
             fragment_source: None,
             #[cfg(feature = "hot-reload")]
             fragment_source_watcher: None,
-            uniforms: Box::new(|| vec![]),
+            uniforms: Box::new(|_| vec![]),
         }));
         self
     }
@@ -69,11 +75,11 @@ pub struct SceneBuilder<'a> {
     fragment_source: Option<&'static str>,
     #[cfg(feature = "hot-reload")]
     fragment_source_watcher: Option<SourceWatcher>,
-    uniforms: Box<dyn Fn() -> Vec<u8>>,
+    uniforms: Box<dyn Fn(&dyn TimeSource) -> Vec<u8>>,
 }
 
 impl<'a> SceneBuilder<'a> {
-    pub fn with_uniforms(mut self, uniforms: impl Fn() -> Vec<u8> + 'static) -> SceneBuilder<'a> {
+    pub fn with_uniforms(mut self, uniforms: impl Fn(&dyn TimeSource) -> Vec<u8> + 'static) -> SceneBuilder<'a> {
         self.uniforms = Box::new(uniforms);
         self
     }
@@ -102,7 +108,7 @@ impl<'a> SceneBuilder<'a> {
                 &demo.device,
                 demo.get_preferred_format(),
                 frag,
-                &(self.uniforms)(),
+                &(self.uniforms)(&demo.time),
             ),
             #[cfg(feature = "hot-reload")]
             fragment_source_watcher: self.fragment_source_watcher,

@@ -5,24 +5,25 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use winit::window::Window;
 
-use crate::DemoBuilder;
+use crate::{DemoBuilder, sync};
 
 impl DemoBuilder {
-    pub fn use_debug_ui(mut self, init: impl Fn(&mut egui::Ui) + 'static) -> DemoBuilder {
-        self.demo.ui = Some(Ui::new(&self, init));
+    pub fn with_tracker(mut self, tracker: sync::Tracker) -> DemoBuilder {
+        self.demo.tracker = Some(tracker);
         self
     }
 }
 
 pub struct Ui {
-    init: Box<dyn Fn(&mut egui::Ui)>,
     platform: egui_winit_platform::Platform,
     pass: egui_wgpu_backend::RenderPass,
 }
 
 impl Ui {
-    pub fn new(demo_builder: &DemoBuilder, init: impl Fn(&mut egui::Ui) + 'static) -> Ui {
-        let window = &demo_builder.demo.window;
+    pub fn new(window: &Window
+        , device: &wgpu::Device
+        , format: wgpu::TextureFormat
+    ) -> Ui {
         let size = window.inner_size();
 
         let platform = Platform::new(PlatformDescriptor {
@@ -34,13 +35,12 @@ impl Ui {
         });
 
         let pass = RenderPass::new(
-            &demo_builder.demo.device,
-            demo_builder.demo.get_preferred_format(),
+            device,
+            format,
             1,
         );
 
         Ui {
-            init: Box::new(init),
             platform,
             pass,
         }
@@ -53,6 +53,7 @@ impl Ui {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
+        tracker: &mut Option<sync::Tracker>,
     ) {
         let size = window.inner_size();
         let screen_descriptor = ScreenDescriptor {
@@ -64,9 +65,16 @@ impl Ui {
         self.platform.begin_frame();
         {
             let ctx = &self.platform.context();
-            egui::Window::new("usch toolkit").show(ctx, |ui| {
-                self.init.as_mut()(ui);
-            });
+
+            match tracker {
+                Some(ref mut tracker) => {
+                    egui::Window::new("Tracker")
+                        .show(ctx, |ui| {
+                            widgets::tracker_view(tracker, ui);
+                        });
+                },
+                None => (),
+            }
         }
         let output = self.platform.end_frame(None);
 
@@ -93,9 +101,9 @@ impl Ui {
 pub mod widgets {
     use std::time::Duration;
 
-    use egui::{Slider, Ui};
+    use egui::{Slider, Ui, Grid, Key, Event, Color32, RichText, Label};
 
-    use crate::time::{SeekableTimeSource, TimeSource};
+    use crate::{time::{SeekableTimeSource, TimeSource}, sync};
 
     pub fn time_seeker(ui: &mut Ui, time_source: &mut SeekableTimeSource) {
         let mut time = time_source.elapsed().as_secs_f32();
@@ -103,5 +111,85 @@ pub mod widgets {
         if time != time_source.elapsed().as_secs_f32() {
             time_source.seek(Duration::from_secs_f32(time));
         }
+    }
+
+    pub fn tracker_view(tracker: &mut sync::Tracker, ui: &mut Ui) {
+        let mut row = tracker.current_row() as i32;
+        {
+            let events = &ui.input().events;
+            for event in events {
+                match event {
+                    Event::Key {
+                        key: Key::Space,
+                        pressed: true,
+                        modifiers: _,
+                    } => {
+                        tracker.playing = !tracker.playing;
+                    }
+                    Event::Key {
+                        key: Key::ArrowUp,
+                        pressed: true,
+                        modifiers,
+                    } => {
+                        row = std::cmp::max(1, row - if modifiers.shift { 4 } else { 1 });
+                    }
+                    Event::Key {
+                        key: Key::ArrowDown,
+                        pressed: true,
+                        modifiers,
+                    } => {
+                        row += if modifiers.shift { 4 } else { 1 };
+                    }
+                    _ => ()
+                }
+            }
+        }
+
+        if !tracker.playing {
+            tracker.time.seek(tracker.get_time_from_row(row as u32));
+        }
+        let tracks = tracker.tracks();
+
+        Grid::new("tracker_view")
+            .num_columns(tracks.len() + 1)
+            .striped(true)
+            .show(ui, |ui| {
+                // Headings
+                ui.label(RichText::new("Beat").strong());
+                for track in tracks {
+                    ui.label(RichText::new(track.name()).strong());
+                }
+                ui.end_row();
+
+                // Values
+                for n in (row - 20)..(row + 20) {
+                    if n <= 0 {
+                        ui.end_row();
+                        continue;
+                    }
+
+                    if (n - 1) % 4 == 0 {
+                        ui.colored_label(Color32::RED, format!("{:04}", n));
+                    } else {
+                        ui.label(format!("{:04}", n));
+                    }
+
+                    for track in tracks {
+                        if n == row {
+                            match track.get_value(n as u32) {
+                                Some(value) => ui.label(RichText::new(format!("{}", value)).background_color(Color32::GRAY)),
+                                None => ui.label(RichText::new("...").background_color(Color32::LIGHT_GRAY)),
+                            };
+                        } else {
+                            match track.get_value(n as u32) {
+                                Some(value) => ui.label(format!("{}", value)),
+                                None => ui.label("..."),
+                            };
+                        }
+                    }
+
+                    ui.end_row();
+                }
+            });
     }
 }

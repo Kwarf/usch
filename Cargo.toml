@@ -5,17 +5,20 @@ edition = "2021"
 
 [dependencies]
 bytemuck = { version = "1.9", features = [ "derive" ] }
-egui = {version = "0.17", optional = true }
-egui_wgpu_backend = {version = "0.17", optional = true }
-egui_winit_platform = {version = "0.14", optional = true }
+egui = { version = "0.17", optional = true }
+egui_wgpu_backend = { version = "0.17", optional = true }
+egui_winit_platform = { version = "0.14", optional = true }
 futures = "0.3"
 lazy_static = "1.4"
 notify = { version = "4.0", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
 shaderc = "0.8"
 wgpu = { version = "0.12", features = ["spirv"] }
 winit = "0.26"
 
 [features]
-default = ["hot-reload", "ui"]
+default = ["editor"]
+editor = ["hot-reload", "ui", "dep:serde", "dep:serde_json"]
 hot-reload = ["dep:notify"]
 ui = ["dep:egui", "dep:egui_wgpu_backend", "dep:egui_winit_platform"]

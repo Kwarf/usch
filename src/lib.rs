@@ -1,6 +1,7 @@
 use std::{borrow::Cow, time::Instant};
 
 use futures::executor::block_on;
+use time::{SeekableTimeSource, TimeSource};
 use winit::{
     dpi::PhysicalSize,
     event_loop::{ControlFlow, EventLoop},
@@ -17,7 +18,8 @@ mod glsl;
 mod raymarching;
 #[cfg(feature = "hot-reload")]
 mod source_watcher;
-pub mod time;
+pub mod sync;
+mod time;
 #[cfg(feature = "ui")]
 pub mod ui;
 
@@ -29,8 +31,11 @@ pub struct Demo {
     surface: wgpu::Surface,
     adapter: wgpu::Adapter,
     scenes: Vec<Scene>,
+    time: SeekableTimeSource,
     #[cfg(feature = "ui")]
-    ui: Option<ui::Ui>,
+    tracker: Option<sync::Tracker>,
+    #[cfg(feature = "ui")]
+    ui: ui::Ui,
 }
 
 impl Demo {
@@ -45,14 +50,15 @@ impl Demo {
         };
         self.surface.configure(&self.device, &config);
 
+        #[cfg(feature=  "ui")]
         let start_time = Instant::now();
+        self.time = SeekableTimeSource::now();
+
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
             #[cfg(feature = "ui")]
-            self.ui
-                .as_mut()
-                .map(|x| x.handle_event(&start_time.elapsed(), &event));
+            self.ui.handle_event(&start_time.elapsed(), &event);
 
             match event {
                 winit::event::Event::WindowEvent {
@@ -74,10 +80,11 @@ impl Demo {
                     #[cfg(feature = "hot-reload")]
                     active_scene.reload_shaders_if_requested(
                         &self.device,
+                        &self.time,
                         self.surface.get_preferred_format(&self.adapter).unwrap(),
                     );
 
-                    active_scene.update(&self.queue);
+                    active_scene.update(&self.queue, &self.time);
 
                     let frame = self.surface.get_current_texture().unwrap();
                     let view = frame
@@ -104,9 +111,11 @@ impl Demo {
                     }
 
                     #[cfg(feature = "ui")]
-                    self.ui.as_mut().map(|x| {
-                        x.draw(&self.window, &self.device, &self.queue, &mut encoder, &view)
-                    });
+                    {
+                        self.tracker.as_mut().unwrap().time = self.time.clone();
+                        self.ui.draw(&self.window, &self.device, &self.queue, &mut encoder, &view, &mut self.tracker);
+                        self.time = self.tracker.as_ref().unwrap().time.clone();
+                    }
 
                     self.queue.submit(Some(encoder.finish()));
                     frame.present();
@@ -128,12 +137,12 @@ pub struct Scene {
     pipeline: raymarching::Pipeline,
     #[cfg(feature = "hot-reload")]
     fragment_source_watcher: Option<SourceWatcher>,
-    uniforms: Box<dyn Fn() -> Vec<u8>>,
+    uniforms: Box<dyn Fn(&dyn TimeSource) -> Vec<u8>>,
 }
 
 impl Scene {
-    pub fn update(&self, queue: &wgpu::Queue) {
-        queue.write_buffer(&self.pipeline.uniform_buffer, 0, &(self.uniforms)());
+    pub fn update(&self, queue: &wgpu::Queue, time: &dyn TimeSource) {
+        queue.write_buffer(&self.pipeline.uniform_buffer, 0, &(self.uniforms)(time));
     }
 
     pub fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
@@ -147,6 +156,7 @@ impl Scene {
     pub fn reload_shaders_if_requested(
         &mut self,
         device: &wgpu::Device,
+        time: &dyn TimeSource,
         format: wgpu::TextureFormat,
     ) {
         match &self.fragment_source_watcher {
@@ -156,12 +166,32 @@ impl Scene {
                         device,
                         format,
                         wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(&content))),
-                        &(self.uniforms)(),
+                        &(self.uniforms)(time),
                     )
                 }
                 None => (),
             },
             None => (),
         }
+    }
+}
+
+mod binary {
+    use std::{io::{Read, Write}, mem::size_of};
+
+    use bytemuck::{from_bytes, bytes_of};
+
+    pub fn read<T: bytemuck::Pod>(mut reader: impl Read) -> T {
+        let mut buf: Vec<u8> = Vec::with_capacity(size_of::<T>());
+        reader.read_exact(&mut buf).unwrap();
+        *from_bytes::<T>(&buf)
+    }
+    
+    pub fn write<T: bytemuck::Pod>(mut writer: impl Write, value: &T) {
+        write_bytes(writer, bytes_of(value));
+    }
+
+    pub fn write_bytes(mut writer: impl Write, bytes: &[u8]) {
+        writer.write_all(bytes).unwrap();
     }
 }
