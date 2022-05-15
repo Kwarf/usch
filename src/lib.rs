@@ -47,7 +47,7 @@ impl Demo {
 
         let start_time = Instant::now();
         self.event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Wait;
+            *control_flow = ControlFlow::Poll;
 
             #[cfg(feature = "ui")]
             self.ui
@@ -110,6 +110,8 @@ impl Demo {
 
                     self.queue.submit(Some(encoder.finish()));
                     frame.present();
+                }
+                winit::event::Event::MainEventsCleared => {
                     self.window.request_redraw();
                 }
                 _ => (),
