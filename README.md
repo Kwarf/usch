@@ -6,13 +6,20 @@ Use at your own risk.
 cargo run --example 01-raymarch
 ```
 
+It won't be on cargo.io for a long long time, so if you want to play around:
+
+```
+[dependencies]
+usch = { git = "https://github.com/kwarf/usch.git" }
+```
+
 ## Hopes and dreams
 
 ### Stage one
 
 - ❌ Support single-scene fragment shader demos ([Raymarching](http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/) e.g.)
 - ✅ Live shader reloading
-- ❌ Reasonably deterministic audio playback
+- ✅ Reasonably deterministic audio playback
 - ✅ Time-scrubbing
 
 ## FAQ

@@ -1,11 +1,11 @@
-use std::time::Duration;
+use std::{time::Duration, sync::{Arc, Mutex}};
 
 use egui::FontDefinitions;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use winit::window::Window;
 
-use crate::{DemoBuilder, sync};
+use crate::{DemoBuilder, sync, music::Music};
 
 impl DemoBuilder {
     pub fn with_tracker(mut self, tracker: sync::Tracker) -> DemoBuilder {
@@ -54,6 +54,7 @@ impl Ui {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         tracker: &mut Option<sync::Tracker>,
+        music: &mut Option<Arc<Mutex<Music>>>,
     ) {
         let size = window.inner_size();
         let screen_descriptor = ScreenDescriptor {
@@ -70,7 +71,7 @@ impl Ui {
                 Some(ref mut tracker) => {
                     egui::Window::new("Tracker")
                         .show(ctx, |ui| {
-                            widgets::tracker_view(tracker, ui);
+                            widgets::tracker_view(tracker, music, ui);
                         });
                 },
                 None => (),
@@ -99,11 +100,11 @@ impl Ui {
 }
 
 pub mod widgets {
-    use std::time::Duration;
+    use std::{time::Duration, sync::{Arc, Mutex}};
 
-    use egui::{Slider, Ui, Grid, Key, Event, Color32, RichText, Label};
+    use egui::{Slider, Ui, Grid, Key, Event, Color32, RichText};
 
-    use crate::{time::{SeekableTimeSource, TimeSource}, sync};
+    use crate::{time::{SeekableTimeSource, TimeSource}, sync, music::Music};
 
     pub fn time_seeker(ui: &mut Ui, time_source: &mut SeekableTimeSource) {
         let mut time = time_source.elapsed().as_secs_f32();
@@ -113,8 +114,15 @@ pub mod widgets {
         }
     }
 
-    pub fn tracker_view(tracker: &mut sync::Tracker, ui: &mut Ui) {
+    pub fn tracker_view(tracker: &mut sync::Tracker,
+        music: &mut Option<Arc<Mutex<Music>>>,
+        ui: &mut Ui
+    ) {
         let mut row = tracker.current_row() as i32;
+        if !tracker.playing {
+            tracker.time.seek(tracker.get_time_from_row(row as u32));
+        }
+        
         {
             let events = &ui.input().events;
             for event in events {
@@ -125,13 +133,24 @@ pub mod widgets {
                         modifiers: _,
                     } => {
                         tracker.playing = !tracker.playing;
+
+                        match music {
+                            Some(music) => {
+                                let mut music = music.as_ref().lock().unwrap();
+                                music.paused = !tracker.playing;
+                                if tracker.playing {
+                                    music.seek(&tracker.get_time_from_row(row as u32));
+                                }
+                            },
+                            None => (),
+                        };
                     }
                     Event::Key {
                         key: Key::ArrowUp,
                         pressed: true,
                         modifiers,
                     } => {
-                        row = std::cmp::max(1, row - if modifiers.shift { 4 } else { 1 });
+                        row = std::cmp::max(0, row - if modifiers.shift { 4 } else { 1 });
                     }
                     Event::Key {
                         key: Key::ArrowDown,
@@ -163,12 +182,12 @@ pub mod widgets {
 
                 // Values
                 for n in (row - 20)..(row + 20) {
-                    if n <= 0 {
+                    if n < 0 {
                         ui.end_row();
                         continue;
                     }
 
-                    if (n - 1) % 4 == 0 {
+                    if n % 4 == 0 {
                         ui.colored_label(Color32::RED, format!("{:04}", n));
                     } else {
                         ui.label(format!("{:04}", n));

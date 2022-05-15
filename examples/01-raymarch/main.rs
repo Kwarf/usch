@@ -10,7 +10,7 @@ struct Uniforms {
 }
 
 fn main() {
-    let mut tracker = usch::sync::Tracker::new(174
+    let mut tracker = usch::sync::Tracker::new(140
         , std::path::Path::new("examples/01-raymarch/sync.json")
         , &["foo"]
     );
@@ -19,6 +19,7 @@ fn main() {
 
     DemoBuilder::new((1920, 1080), "01 Raymarch")
         .with_tracker(tracker)
+        .with_ogg_music(include_bytes!("music.ogg"), Some(743006))
         .scene(|builder| {
             builder
                 .with_uniforms(|time| {

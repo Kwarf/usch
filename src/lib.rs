@@ -1,5 +1,6 @@
-use std::{borrow::Cow, time::Instant};
+use std::{borrow::Cow, time::Instant, sync::{Arc, Mutex}};
 
+use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, SampleFormat, Stream, SupportedBufferSize, BufferSize};
 use futures::executor::block_on;
 use time::{SeekableTimeSource, TimeSource};
 use winit::{
@@ -15,6 +16,7 @@ use source_watcher::SourceWatcher;
 mod buffertypes;
 mod builders;
 mod glsl;
+pub mod music;
 mod raymarching;
 #[cfg(feature = "hot-reload")]
 mod source_watcher;
@@ -30,6 +32,7 @@ pub struct Demo {
     queue: wgpu::Queue,
     surface: wgpu::Surface,
     adapter: wgpu::Adapter,
+    music: Option<Arc<Mutex<music::Music>>>,
     scenes: Vec<Scene>,
     time: SeekableTimeSource,
     #[cfg(feature = "ui")]
@@ -40,6 +43,9 @@ pub struct Demo {
 
 impl Demo {
     pub fn run(mut self) {
+        let stream = self.init_music().unwrap();
+        stream.play().unwrap();
+
         let size = self.window.inner_size();
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -113,7 +119,14 @@ impl Demo {
                     #[cfg(feature = "ui")]
                     {
                         self.tracker.as_mut().unwrap().time = self.time.clone();
-                        self.ui.draw(&self.window, &self.device, &self.queue, &mut encoder, &view, &mut self.tracker);
+                        self.ui.draw(&self.window
+                            , &self.device
+                            , &self.queue
+                            , &mut encoder
+                            , &view
+                            , &mut self.tracker
+                            , &mut self.music
+                        );
                         self.time = self.tracker.as_ref().unwrap().time.clone();
                     }
 
@@ -130,6 +143,59 @@ impl Demo {
 
     pub fn get_preferred_format(&self) -> wgpu::TextureFormat {
         self.surface.get_preferred_format(&self.adapter).unwrap()
+    }
+
+    fn init_music(&self) -> Option<Stream> {
+        match &self.music {
+            None => None,
+            Some(music) => {
+                let music = music.as_ref().lock().unwrap();
+                let host = cpal::default_host();
+                let device = host.default_output_device().unwrap();
+                let supported_config = device
+                    .supported_output_configs()
+                    .unwrap()
+                    .find(|x| x.channels() == 2
+                        && x.min_sample_rate().0 <= music.sample_rate
+                        && x.max_sample_rate().0 >= music.sample_rate
+                        && x.sample_format() == SampleFormat::F32
+                    )
+                    .unwrap()
+                    .with_sample_rate(cpal::SampleRate(music.sample_rate));
+                let mut config = supported_config.config();
+
+                // Use the smallest supported buffer size during editing for consistent scrubbing
+                #[cfg(feature = "ui")]
+                match supported_config.buffer_size() {
+                    SupportedBufferSize::Range
+                    {
+                        min,
+                        max: _
+                    } => config.buffer_size = BufferSize::Fixed(*min),
+                    SupportedBufferSize::Unknown => (),
+                }
+
+                device.build_output_stream(&config,
+                    {
+                        let music = self.music.as_ref().unwrap().clone();
+                        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                            match music.as_ref().lock() {
+                                Ok(mut music) => {
+                                    let samples = music.read(data.len());
+                                    for i in data.iter_mut().enumerate() {
+                                        *i.1 = cpal::Sample::from(&samples[i.0]);
+                                    }
+                                },
+                                Err(_) => panic!(),
+                            }
+                        }
+                    },
+                    move |_err| {
+                        panic!()
+                    },
+                ).ok()
+            }
+        }
     }
 }
 

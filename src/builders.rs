@@ -44,6 +44,7 @@ impl DemoBuilder {
                 queue,
                 surface,
                 adapter,
+                music: None,
                 scenes: vec![],
                 time: SeekableTimeSource::now(),
                 #[cfg(feature = "ui")]
