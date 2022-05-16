@@ -13,7 +13,7 @@ pub struct Tracker {
 }
 
 impl Tracker {
-    pub fn new(bpm: u32, path: &Path, track_names: &[&'static str]) -> Tracker {
+    pub fn new(bpm: u32, path: Option<&Path>, track_names: &[&'static str]) -> Tracker {
         let tracks = track_names
             .iter()
             .map(|x| Track
@@ -23,7 +23,7 @@ impl Tracker {
             })
             .collect::<Vec<Track>>();
 
-        Tracker { bpm, tracks, path: Some(path.to_path_buf()), time: SeekableTimeSource::now(), playing: true }
+        Tracker { bpm, tracks, path: path.map(|x| x.to_path_buf()), time: SeekableTimeSource::now(), playing: true }
     }
 
     pub fn current_row(&self) -> u32 {

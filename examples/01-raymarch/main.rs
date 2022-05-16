@@ -11,7 +11,7 @@ struct Uniforms {
 
 fn main() {
     let mut tracker = usch::sync::Tracker::new(140
-        , std::path::Path::new("examples/01-raymarch/sync.json")
+        , Some(std::path::Path::new("examples/01-raymarch/sync.json"))
         , &["foo"]
     );
 
