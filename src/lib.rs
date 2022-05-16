@@ -160,7 +160,7 @@ impl Demo {
                         && x.max_sample_rate().0 >= music.sample_rate
                         && x.sample_format() == SampleFormat::F32
                     )
-                    .unwrap()
+                    .expect(&format!("No audio output device supporting {} sample rate found", music.sample_rate))
                     .with_sample_rate(cpal::SampleRate(music.sample_rate));
                 let mut config = supported_config.config();
 
