@@ -43,8 +43,10 @@ pub struct Demo {
 
 impl Demo {
     pub fn run(mut self) {
-        let stream = self.init_music().unwrap();
-        stream.play().unwrap();
+        if self.music.is_some() {
+            let stream = self.init_music().unwrap();
+            stream.play().unwrap();
+        }
 
         let size = self.window.inner_size();
         let config = wgpu::SurfaceConfiguration {
