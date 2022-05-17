@@ -9,7 +9,6 @@ pub struct Tracker {
     tracks: Vec<Track>,
     path: Option<PathBuf>,
     pub time: SeekableTimeSource,
-    pub playing: bool,
 }
 
 impl Tracker {
@@ -23,7 +22,7 @@ impl Tracker {
             })
             .collect::<Vec<Track>>();
 
-        Tracker { bpm, tracks, path: path.map(|x| x.to_path_buf()), time: SeekableTimeSource::now(), playing: true }
+        Tracker { bpm, tracks, path: path.map(|x| x.to_path_buf()), time: SeekableTimeSource::now() }
     }
 
     pub fn current_row(&self) -> u32 {

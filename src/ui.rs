@@ -100,29 +100,17 @@ impl Ui {
 }
 
 pub mod widgets {
-    use std::{time::Duration, sync::{Arc, Mutex}};
+    use std::{sync::{Arc, Mutex}};
 
-    use egui::{Slider, Ui, Grid, Key, Event, Color32, RichText};
+    use egui::{Ui, Grid, Key, Event, Color32, RichText};
 
-    use crate::{time::{SeekableTimeSource, TimeSource}, sync, music::Music};
-
-    pub fn time_seeker(ui: &mut Ui, time_source: &mut SeekableTimeSource) {
-        let mut time = time_source.elapsed().as_secs_f32();
-        ui.add(Slider::new(&mut time, 0.0..=100.0).text("Time"));
-        if time != time_source.elapsed().as_secs_f32() {
-            time_source.seek(Duration::from_secs_f32(time));
-        }
-    }
+    use crate::{sync, music::Music};
 
     pub fn tracker_view(tracker: &mut sync::Tracker,
         music: &mut Option<Arc<Mutex<Music>>>,
         ui: &mut Ui
     ) {
         let mut row = tracker.current_row() as i32;
-        if !tracker.playing {
-            tracker.time.seek(tracker.get_time_from_row(row as u32));
-        }
-        
         {
             let events = &ui.input().events;
             for event in events {
@@ -132,13 +120,13 @@ pub mod widgets {
                         pressed: true,
                         modifiers: _,
                     } => {
-                        tracker.playing = !tracker.playing;
+                        tracker.time.set_paused(!tracker.time.is_paused());
 
                         match music {
                             Some(music) => {
                                 let mut music = music.as_ref().lock().unwrap();
-                                music.paused = !tracker.playing;
-                                if tracker.playing {
+                                music.paused = tracker.time.is_paused();
+                                if !music.paused {
                                     music.seek(&tracker.get_time_from_row(row as u32));
                                 }
                             },
@@ -151,6 +139,8 @@ pub mod widgets {
                         modifiers,
                     } => {
                         row = std::cmp::max(0, row - if modifiers.shift { 4 } else { 1 });
+                        tracker.time.seek(tracker.get_time_from_row(row as u32));
+                        tracker.time.set_paused(true);
                     }
                     Event::Key {
                         key: Key::ArrowDown,
@@ -158,15 +148,14 @@ pub mod widgets {
                         modifiers,
                     } => {
                         row += if modifiers.shift { 4 } else { 1 };
+                        tracker.time.seek(tracker.get_time_from_row(row as u32));
+                        tracker.time.set_paused(true);
                     }
                     _ => ()
                 }
             }
         }
 
-        if !tracker.playing {
-            tracker.time.seek(tracker.get_time_from_row(row as u32));
-        }
         let tracks = tracker.tracks();
 
         Grid::new("tracker_view")
