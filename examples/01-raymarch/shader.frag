@@ -102,7 +102,7 @@ vec3 render(vec3 rayOrigin, vec3 rayDir)
 vec3 getCameraRayDir(vec2 uv, vec3 camPos, vec3 camTarget)
 {
 	vec3 camForward = normalize(camTarget - camPos);
-	vec3 camRight = normalize(cross(vec3(0.0, -1.0, 0.0), camForward));
+	vec3 camRight = normalize(cross(vec3(0.0, 1.0, 0.0), camForward));
 	vec3 camUp = normalize(cross(camForward, camRight));
 
 	// fPersp controls the camera's field of view. Try changing it!
@@ -116,6 +116,7 @@ vec2 normalizeScreenCoords(vec2 screenCoord)
 {
 	vec2 result = 2.0 * (screenCoord/iResolution.xy - 0.5);
 	result.x *= iResolution.x/iResolution.y; // Correct for aspect ratio
+	result.y *= -1.0;
 	return result;
 }
 
@@ -128,8 +129,6 @@ void main()
 	vec3 rayDir = getCameraRayDir(uv, camPos, at);  
 	
 	vec3 col = render(camPos, rayDir);
-	
-	col = pow(col, vec3(0.4545)); // Gamma correction (1.0 / 2.2)
 	
 	fragColor = vec4(col,1.0); // Output to screen
 }
