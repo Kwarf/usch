@@ -1,4 +1,4 @@
-use std::{borrow::Cow, time::Instant, sync::{Arc, Mutex}};
+use std::{borrow::Cow, time::Instant, sync::{Arc, Mutex}, path::PathBuf};
 
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, SampleFormat, Stream, SupportedBufferSize, BufferSize};
 use futures::executor::block_on;
@@ -209,6 +209,8 @@ pub struct Scene {
     pipeline: raymarching::Pipeline,
     #[cfg(feature = "hot-reload")]
     fragment_source_watcher: Option<SourceWatcher>,
+    #[cfg(feature = "hot-reload")]
+    glsl_include_paths: Option<Vec<PathBuf>>,
     uniforms: Box<dyn Fn(&dyn TimeSource) -> Vec<u8>>,
 }
 
@@ -237,7 +239,7 @@ impl Scene {
                     self.pipeline = raymarching::build_pipeline(
                         device,
                         format,
-                        wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(&content))),
+                        wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(&content, &self.glsl_include_paths))),
                         &(self.uniforms)(time),
                     )
                 }

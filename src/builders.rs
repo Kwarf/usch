@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{*, time::TimeSource};
 
 pub struct DemoBuilder {
@@ -61,6 +63,8 @@ impl DemoBuilder {
             fragment_source: None,
             #[cfg(feature = "hot-reload")]
             fragment_source_watcher: None,
+            #[cfg(feature = "hot-reload")]
+            glsl_include_paths: None,
             uniforms: Box::new(|_| vec![]),
         }));
         self
@@ -76,12 +80,23 @@ pub struct SceneBuilder<'a> {
     fragment_source: Option<&'static str>,
     #[cfg(feature = "hot-reload")]
     fragment_source_watcher: Option<SourceWatcher>,
+    #[cfg(feature = "hot-reload")]
+    glsl_include_paths: Option<Vec<PathBuf>>,
     uniforms: Box<dyn Fn(&dyn TimeSource) -> Vec<u8>>,
 }
 
 impl<'a> SceneBuilder<'a> {
     pub fn with_uniforms(mut self, uniforms: impl Fn(&dyn TimeSource) -> Vec<u8> + 'static) -> SceneBuilder<'a> {
         self.uniforms = Box::new(uniforms);
+        self
+    }
+
+    pub fn add_glsl_include_path(mut self, path: impl Into<PathBuf>) -> SceneBuilder<'a> {
+        if self.glsl_include_paths.is_none() {
+            self.glsl_include_paths = Some(vec!(path.into()));
+        } else {
+            self.glsl_include_paths.as_mut().unwrap().push(path.into());
+        }
         self
     }
 
@@ -102,6 +117,7 @@ impl<'a> SceneBuilder<'a> {
         let frag = wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(
             self.fragment_source
                 .expect("No fragment shader source provided"),
+            &self.glsl_include_paths
         )));
 
         Scene {
@@ -113,6 +129,8 @@ impl<'a> SceneBuilder<'a> {
             ),
             #[cfg(feature = "hot-reload")]
             fragment_source_watcher: self.fragment_source_watcher,
+            #[cfg(feature = "hot-reload")]
+            glsl_include_paths: self.glsl_include_paths,
             uniforms: self.uniforms,
         }
     }
