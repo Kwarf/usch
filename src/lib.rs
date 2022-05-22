@@ -236,10 +236,16 @@ impl Scene {
         match &self.fragment_source_watcher {
             Some(rx) => match rx.get_new_content() {
                 Some(content) => {
+                    let shader = glsl::compile_fragment(&content, &self.glsl_include_paths);
+                    if shader.is_err() {
+                        println!("Failed to hot-reload shader:\n{}", shader.err().unwrap());
+                        return;
+                    }
+
                     self.pipeline = raymarching::build_pipeline(
                         device,
                         format,
-                        wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(&content, &self.glsl_include_paths))),
+                        wgpu::ShaderSource::SpirV(Cow::Owned(shader.unwrap())),
                         &(self.uniforms)(time),
                     )
                 }

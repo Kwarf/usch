@@ -118,7 +118,7 @@ impl<'a> SceneBuilder<'a> {
             self.fragment_source
                 .expect("No fragment shader source provided"),
             &self.glsl_include_paths
-        )));
+        ).unwrap()));
 
         Scene {
             pipeline: raymarching::build_pipeline(

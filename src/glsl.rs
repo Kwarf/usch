@@ -10,22 +10,22 @@ layout(location = 0) in vec2 in_position;
 void main()
 {
     gl_Position = vec4(in_position.xy, 0.0, 1.0);
-}");
+}").unwrap();
 }
 
 pub fn vertex_passthrough() -> &'static [u32] {
     &VERT_PASSTHROUGH
 }
 
-pub fn compile_vertex(src: &str) -> Vec<u32> {
+pub fn compile_vertex(src: &str) -> Result<Vec<u32>, shaderc::Error> {
     compile(src, &None, shaderc::ShaderKind::Vertex)
 }
 
-pub fn compile_fragment(src: &str, includes: &Option<Vec<PathBuf>>) -> Vec<u32> {
+pub fn compile_fragment(src: &str, includes: &Option<Vec<PathBuf>>) -> Result<Vec<u32>, shaderc::Error> {
     compile(src, includes, shaderc::ShaderKind::Fragment)
 }
 
-fn compile(src: &str, includes: &Option<Vec<PathBuf>>, shader_kind: shaderc::ShaderKind) -> Vec<u32> {
+fn compile(src: &str, includes: &Option<Vec<PathBuf>>, shader_kind: shaderc::ShaderKind) -> Result<Vec<u32>, shaderc::Error> {
     let mut options = CompileOptions::new().unwrap();
     options.set_include_callback(|name, _, _, _| {
             let path = Path::new(name);
@@ -47,15 +47,14 @@ fn compile(src: &str, includes: &Option<Vec<PathBuf>>, shader_kind: shaderc::Sha
             }
         });
 
-    shaderc::Compiler::new()
+    Ok(shaderc::Compiler::new()
         .unwrap()
         .compile_into_spirv(src,
             shader_kind,
             "shader.glsl",
             "main",
             Some(&options)
-        )
-        .unwrap()
+        )?
         .as_binary()
-        .to_vec()
+        .to_vec())
 }
