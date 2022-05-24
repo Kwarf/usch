@@ -176,10 +176,11 @@ pub mod widgets {
                         continue;
                     }
 
+                    let label = if n == row { format!("{:04} >", n) } else { format!("{:04}", n) };
                     if n % 4 == 0 {
-                        ui.colored_label(Color32::RED, format!("{:04}", n));
+                        ui.colored_label(Color32::RED, label);
                     } else {
-                        ui.label(format!("{:04}", n));
+                        ui.label(label);
                     }
 
                     for track in tracks {
