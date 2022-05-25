@@ -25,9 +25,9 @@ impl DemoBuilder {
             sample_rate: reader.ident_hdr.audio_sample_rate,
             data,
             position: 0,
-            #[cfg(feature = "ui")]
+            #[cfg(feature = "editor")]
             paused: false,
-            #[cfg(feature = "ui")]
+            #[cfg(feature = "editor")]
             zero: Vec::new(),
         })));
         self
@@ -38,15 +38,15 @@ pub struct Music {
     pub(super) sample_rate: u32,
     pub(super) data: Vec<i16>,
     pub(super) position: usize,
-    #[cfg(feature = "ui")]
+    #[cfg(feature = "editor")]
     pub(super) paused: bool,
-    #[cfg(feature = "ui")]
+    #[cfg(feature = "editor")]
     zero: Vec<i16>,
 }
 
 impl Music {
     pub fn read<'a>(&mut self, len: usize) -> &[i16] {
-        #[cfg(feature = "ui")]
+        #[cfg(feature = "editor")]
         if self.paused {
             if self.zero.len() < len {
                 self.zero = iter::repeat(0).take(len).collect();
@@ -59,7 +59,7 @@ impl Music {
         data
     }
 
-    #[cfg(feature = "ui")]
+    #[cfg(feature = "editor")]
     pub fn seek(&mut self, position: &Duration) {
         self.position = (position.as_secs_f32() * self.sample_rate as f32) as usize * 2;
     }

@@ -10,7 +10,7 @@ use winit::{
 };
 
 pub use builders::DemoBuilder;
-#[cfg(feature = "hot-reload")]
+#[cfg(feature = "editor")]
 use source_watcher::SourceWatcher;
 
 mod buffertypes;
@@ -18,11 +18,11 @@ mod builders;
 mod glsl;
 pub mod music;
 mod raymarching;
-#[cfg(feature = "hot-reload")]
+#[cfg(feature = "editor")]
 mod source_watcher;
 pub mod sync;
 mod time;
-#[cfg(feature = "ui")]
+#[cfg(feature = "editor")]
 pub mod ui;
 
 pub struct Demo {
@@ -35,9 +35,9 @@ pub struct Demo {
     music: Option<Arc<Mutex<music::Music>>>,
     scenes: Vec<Scene>,
     time: SeekableTimeSource,
-    #[cfg(feature = "ui")]
+    #[cfg(feature = "editor")]
     tracker: Option<sync::Tracker>,
-    #[cfg(feature = "ui")]
+    #[cfg(feature = "editor")]
     ui: ui::Ui,
 }
 
@@ -62,14 +62,14 @@ impl Demo {
         };
         self.surface.configure(&self.device, &config);
 
-        #[cfg(feature=  "ui")]
+        #[cfg(feature=  "editor")]
         let start_time = Instant::now();
         self.time = SeekableTimeSource::now();
 
         self.event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
-            #[cfg(feature = "ui")]
+            #[cfg(feature = "editor")]
             self.ui.handle_event(&start_time.elapsed(), &event);
 
             match event {
@@ -89,7 +89,7 @@ impl Demo {
                 winit::event::Event::RedrawRequested(_) => {
                     let active_scene = self.scenes.first_mut().unwrap();
 
-                    #[cfg(feature = "hot-reload")]
+                    #[cfg(feature = "editor")]
                     active_scene.reload_shaders_if_requested(
                         &self.device,
                         &self.time,
@@ -122,7 +122,7 @@ impl Demo {
                         active_scene.draw(&mut rpass);
                     }
 
-                    #[cfg(feature = "ui")]
+                    #[cfg(feature = "editor")]
                     {
                         self.tracker.as_mut().unwrap().time = self.time.clone();
                         self.ui.draw(&self.window
@@ -171,7 +171,7 @@ impl Demo {
                 let mut config = supported_config.config();
 
                 // Use the smallest supported buffer size during editing for consistent scrubbing
-                #[cfg(feature = "ui")]
+                #[cfg(feature = "editor")]
                 match supported_config.buffer_size() {
                     SupportedBufferSize::Range
                     {
@@ -207,9 +207,9 @@ impl Demo {
 
 pub struct Scene {
     pipeline: raymarching::Pipeline,
-    #[cfg(feature = "hot-reload")]
+    #[cfg(feature = "editor")]
     fragment_source_watcher: Option<SourceWatcher>,
-    #[cfg(feature = "hot-reload")]
+    #[cfg(feature = "editor")]
     glsl_include_paths: Option<Vec<PathBuf>>,
     uniforms: Box<dyn Fn(&dyn TimeSource) -> Vec<u8>>,
 }
@@ -226,7 +226,7 @@ impl Scene {
         pass.draw(0..4, 0..1);
     }
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(feature = "editor")]
     pub fn reload_shaders_if_requested(
         &mut self,
         device: &wgpu::Device,
@@ -238,7 +238,7 @@ impl Scene {
                 Some(content) => {
                     let shader = glsl::compile_fragment(&content, &self.glsl_include_paths);
                     if shader.is_err() {
-                        println!("Failed to hot-reload shader:\n{}", shader.err().unwrap());
+                        println!("Failed to editor shader:\n{}", shader.err().unwrap());
                         return;
                     }
 

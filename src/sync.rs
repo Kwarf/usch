@@ -1,5 +1,6 @@
 use std::{path::{Path, PathBuf}, io::{Write, Read}, time::Duration};
 
+#[cfg(feature = "editor")]
 use serde::{Deserialize, Serialize};
 
 use crate::{binary, time::{SeekableTimeSource, TimeSource}};
@@ -43,7 +44,8 @@ impl Tracker {
             .find(|x| x.name == track_name)
             .expect(&format!("Failed to find a track named {}", track_name))
             .set_value(row, value);
-        
+            
+        #[cfg(feature = "editor")]
         self.save();
     }
 
@@ -51,6 +53,7 @@ impl Tracker {
         (self.bpm as f32 / 60f32) * 4f32
     }
 
+    #[cfg(feature = "editor")]
     fn save(&self) {
         match &self.path {
             Some(path) => {
@@ -62,13 +65,15 @@ impl Tracker {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
+#[cfg_attr(feature = "editor", derive(Serialize, Deserialize))]
 pub struct Track {
     name: String,
     values: Vec<Key>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
+#[cfg_attr(feature = "editor", derive(Serialize, Deserialize))]
 struct Key {
     row: u32,
     value: f32,

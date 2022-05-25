@@ -19,7 +19,13 @@ pub fn build_pipeline(
 ) -> Pipeline {
     let vert_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
         label: None,
-        source: wgpu::ShaderSource::SpirV(Cow::Borrowed(glsl::vertex_passthrough())),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(r"struct VertexOutput {
+    [[builtin(position)]] member: vec4<f32>;
+};
+[[stage(vertex)]]
+fn main([[location(0)]] in_position: vec2<f32>) -> VertexOutput {
+    return VertexOutput(vec4<f32>(in_position.x, in_position.y, 0.0, 1.0));
+}")),
     });
 
     let frag_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {

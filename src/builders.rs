@@ -35,7 +35,7 @@ impl DemoBuilder {
         ))
         .unwrap();
 
-        #[cfg(feature = "ui")]
+        #[cfg(feature = "editor")]
         let ui = ui::Ui::new(&window, &device, surface.get_preferred_format(&adapter).unwrap());
 
         DemoBuilder {
@@ -49,9 +49,9 @@ impl DemoBuilder {
                 music: None,
                 scenes: vec![],
                 time: SeekableTimeSource::now(),
-                #[cfg(feature = "ui")]
+                #[cfg(feature = "editor")]
                 tracker: None,
-                #[cfg(feature = "ui")]
+                #[cfg(feature = "editor")]
                 ui: ui,
             },
         }
@@ -60,10 +60,13 @@ impl DemoBuilder {
     pub fn scene(mut self, builder: impl Fn(SceneBuilder) -> Scene) -> DemoBuilder {
         self.demo.scenes.push(builder(SceneBuilder {
             demo_builder: &self,
-            fragment_source: None,
-            #[cfg(feature = "hot-reload")]
+            #[cfg(not(feature = "editor"))]
+            fragment_wgsl: None,
+            #[cfg(feature = "editor")]
+            fragment_glsl: None,
+            #[cfg(feature = "editor")]
             fragment_source_watcher: None,
-            #[cfg(feature = "hot-reload")]
+            #[cfg(feature = "editor")]
             glsl_include_paths: None,
             uniforms: Box::new(|_| vec![]),
         }));
@@ -77,10 +80,13 @@ impl DemoBuilder {
 
 pub struct SceneBuilder<'a> {
     demo_builder: &'a DemoBuilder,
-    fragment_source: Option<&'static str>,
-    #[cfg(feature = "hot-reload")]
+    #[cfg(not(feature = "editor"))]
+    fragment_wgsl: Option<&'static str>,
+    #[cfg(feature = "editor")]
+    fragment_glsl: Option<&'static str>,
+    #[cfg(feature = "editor")]
     fragment_source_watcher: Option<SourceWatcher>,
-    #[cfg(feature = "hot-reload")]
+    #[cfg(feature = "editor")]
     glsl_include_paths: Option<Vec<PathBuf>>,
     uniforms: Box<dyn Fn(&dyn TimeSource) -> Vec<u8>>,
 }
@@ -91,6 +97,7 @@ impl<'a> SceneBuilder<'a> {
         self
     }
 
+	#[cfg(feature = "editor")]
     pub fn add_glsl_include_path(mut self, path: impl Into<PathBuf>) -> SceneBuilder<'a> {
         if self.glsl_include_paths.is_none() {
             self.glsl_include_paths = Some(vec!(path.into()));
@@ -100,12 +107,19 @@ impl<'a> SceneBuilder<'a> {
         self
     }
 
+    #[cfg(feature = "editor")]
     pub fn set_fragment_source(mut self, src: &'static str) -> SceneBuilder<'a> {
-        self.fragment_source = Some(src);
+        self.fragment_glsl = Some(src);
         self
     }
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(not(feature = "editor"))]
+    pub fn set_fragment_source(mut self, src: &'static str) -> SceneBuilder<'a> {
+        self.fragment_wgsl = Some(src);
+        self
+    }
+
+    #[cfg(feature = "editor")]
     pub fn watch_fragment_source(mut self, path: &std::path::Path) -> SceneBuilder<'a> {
         self.fragment_source_watcher = Some(SourceWatcher::new(path));
         self
@@ -114,12 +128,16 @@ impl<'a> SceneBuilder<'a> {
     pub fn build(self) -> Scene {
         let demo = &self.demo_builder.demo;
 
+        #[cfg(feature = "editor")]
         let frag = wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(
-            self.fragment_source
+            self.fragment_glsl
                 .expect("No fragment shader source provided"),
             &self.glsl_include_paths
         ).unwrap()));
 
+        #[cfg(not(feature = "editor"))]
+        let frag = wgpu::ShaderSource::Wgsl(Cow::Owned(self.fragment_wgsl.unwrap().to_string()));
+        
         Scene {
             pipeline: raymarching::build_pipeline(
                 &demo.device,
@@ -127,9 +145,9 @@ impl<'a> SceneBuilder<'a> {
                 frag,
                 &(self.uniforms)(&demo.time),
             ),
-            #[cfg(feature = "hot-reload")]
+            #[cfg(feature = "editor")]
             fragment_source_watcher: self.fragment_source_watcher,
-            #[cfg(feature = "hot-reload")]
+            #[cfg(feature = "editor")]
             glsl_include_paths: self.glsl_include_paths,
             uniforms: self.uniforms,
         }
