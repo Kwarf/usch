@@ -17,7 +17,7 @@ fn main() {
 
     tracker.set_value("foo", 4, 4.5);
 
-    DemoBuilder::new((1920, 1080), "01 Raymarch")
+    DemoBuilder::new((1920, 1080), false, "01 Raymarch")
         .with_tracker(tracker)
         .with_ogg_music(include_bytes!("music.ogg"), Some(743006))
         .scene(|builder| {

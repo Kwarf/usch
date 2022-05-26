@@ -1,16 +1,24 @@
 use std::path::PathBuf;
 
-use crate::{*, time::TimeSource};
+use winit::window::Fullscreen;
+
+use crate::{time::TimeSource, *};
 
 pub struct DemoBuilder {
     pub(super) demo: Demo,
 }
 
 impl DemoBuilder {
-    pub fn new((width, height): (u32, u32), title: &'static str) -> DemoBuilder {
+    pub fn new((width, height): (u32, u32), fullscreen: bool, title: &'static str) -> DemoBuilder {
         let event_loop = EventLoop::new();
+        let resolution = PhysicalSize { width, height };
         let window = WindowBuilder::new()
-            .with_inner_size(PhysicalSize { width, height })
+            .with_inner_size(resolution)
+            .with_fullscreen(DemoBuilder::fullscreen_mode(
+                &event_loop,
+                resolution,
+                fullscreen,
+            ))
             .with_title(title)
             .build(&event_loop)
             .unwrap();
@@ -36,7 +44,11 @@ impl DemoBuilder {
         .unwrap();
 
         #[cfg(feature = "editor")]
-        let ui = ui::Ui::new(&window, &device, surface.get_preferred_format(&adapter).unwrap());
+        let ui = ui::Ui::new(
+            &window,
+            &device,
+            surface.get_preferred_format(&adapter).unwrap(),
+        );
 
         DemoBuilder {
             demo: Demo {
@@ -76,6 +88,24 @@ impl DemoBuilder {
     pub fn build(self) -> Demo {
         self.demo
     }
+
+    fn fullscreen_mode(
+        event_loop: &EventLoop<()>,
+        resolution: PhysicalSize<u32>,
+        fullscreen: bool,
+    ) -> Option<winit::window::Fullscreen> {
+        if !fullscreen {
+            return None;
+        }
+
+        let video_mode = event_loop.primary_monitor()
+            .unwrap()
+            .video_modes()
+            .find(|x| x.refresh_rate() == 60 && x.size() == resolution)
+            .expect(&format!("Could not find a {}x{} @ 60Hz fullscreen video mode", resolution.width, resolution.height));
+
+        Some(winit::window::Fullscreen::Exclusive(video_mode))
+    }
 }
 
 pub struct SceneBuilder<'a> {
@@ -92,15 +122,18 @@ pub struct SceneBuilder<'a> {
 }
 
 impl<'a> SceneBuilder<'a> {
-    pub fn with_uniforms(mut self, uniforms: impl Fn(&dyn TimeSource) -> Vec<u8> + 'static) -> SceneBuilder<'a> {
+    pub fn with_uniforms(
+        mut self,
+        uniforms: impl Fn(&dyn TimeSource) -> Vec<u8> + 'static,
+    ) -> SceneBuilder<'a> {
         self.uniforms = Box::new(uniforms);
         self
     }
 
-	#[cfg(feature = "editor")]
+    #[cfg(feature = "editor")]
     pub fn add_glsl_include_path(mut self, path: impl Into<PathBuf>) -> SceneBuilder<'a> {
         if self.glsl_include_paths.is_none() {
-            self.glsl_include_paths = Some(vec!(path.into()));
+            self.glsl_include_paths = Some(vec![path.into()]);
         } else {
             self.glsl_include_paths.as_mut().unwrap().push(path.into());
         }
@@ -129,15 +162,18 @@ impl<'a> SceneBuilder<'a> {
         let demo = &self.demo_builder.demo;
 
         #[cfg(feature = "editor")]
-        let frag = wgpu::ShaderSource::SpirV(Cow::Owned(glsl::compile_fragment(
-            self.fragment_glsl
-                .expect("No fragment shader source provided"),
-            &self.glsl_include_paths
-        ).unwrap()));
+        let frag = wgpu::ShaderSource::SpirV(Cow::Owned(
+            glsl::compile_fragment(
+                self.fragment_glsl
+                    .expect("No fragment shader source provided"),
+                &self.glsl_include_paths,
+            )
+            .unwrap(),
+        ));
 
         #[cfg(not(feature = "editor"))]
         let frag = wgpu::ShaderSource::Wgsl(Cow::Owned(self.fragment_wgsl.unwrap().to_string()));
-        
+
         Scene {
             pipeline: raymarching::build_pipeline(
                 &demo.device,
