@@ -23,6 +23,10 @@ impl DemoBuilder {
             .build(&event_loop)
             .unwrap();
 
+        if fullscreen {
+            window.set_cursor_visible(false)
+        }
+
         let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
         let surface = unsafe { instance.create_surface(&window) };
 
