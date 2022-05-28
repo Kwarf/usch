@@ -17,13 +17,14 @@ usch = { git = "https://github.com/kwarf/usch.git" }
 
 ### Stage one
 
-- ✅ Support single-scene fragment shader demos ([Raymarching](http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/) e.g.)
+- ✅ Support single-scene fragment shader demos (see [Kwarf/nothing](https://github.com/Kwarf/nothing) as an example)
 - ✅ Live shader reloading
 - ✅ Reasonably deterministic audio playback
 - ✅ Time-scrubbing
 
 ### Stage two
 - ❌ Real-time editable sync-tracker
+- ❌ Built-in frame capture/pre-render export
 - ❌ Multiple scenes
 - ❌ OGG streaming (currently entirely decoded as a pre-calc stage)
 - ❌ Suspend rendering while state is unchanged (🔋👍)
