@@ -13,14 +13,25 @@ pub enum Fullscreen {
     Exclusive,
 }
 
-pub struct Demo {
+pub struct Demo<'a> {
     pub name: &'static str,
     pub resolution: (u32, u32),
     pub fullscreen: Fullscreen,
     pub music: Option<Music>,
-    pub scenes: Vec<Scene>,
+    pub scenes: Vec<Scene<'a>>,
 }
 
-pub struct Scene {
-    duration: Time,
+pub struct Scene<'a> {
+    pub duration: Time,
+    pub content: SceneContent<'a>,
+}
+
+pub enum SceneContent<'a> {
+    SingleFragmentShader(Shader<'a>),
+}
+
+pub enum Shader<'a> {
+    Wgsl(&'a str),
+    #[cfg(feature = "glsl")]
+    Glsl(&'a str),
 }

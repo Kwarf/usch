@@ -47,15 +47,17 @@ pub fn run(demo: Demo) {
         .block_on()
         .unwrap();
 
-    let size = window.inner_size();
-    let config = SurfaceConfiguration {
-        usage: TextureUsages::RENDER_ATTACHMENT,
-        format: surface.get_preferred_format(&adapter).unwrap(),
-        width: size.width,
-        height: size.height,
-        present_mode: PresentMode::Fifo,
-    };
-    surface.configure(&device, &config);
+    let window_size = window.inner_size();
+    surface.configure(
+        &device,
+        &SurfaceConfiguration {
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            format: surface.get_preferred_format(&adapter).unwrap(),
+            width: window_size.width,
+            height: window_size.height,
+            present_mode: PresentMode::Fifo,
+        },
+    );
 
     let mut t = std::time::Instant::now();
     event_loop.run(move |event, _, control_flow| {

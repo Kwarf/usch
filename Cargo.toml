@@ -4,7 +4,6 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-bytemuck = { version = "1.9", features = ["derive"] }
 cpal = "0.13"
 egui = { version = "0.17", optional = true }
 egui_wgpu_backend = { version = "0.17", optional = true }
@@ -12,20 +11,16 @@ egui_winit_platform = { version = "0.14", optional = true }
 lewton = { version = "0.10", optional = true }
 notify = { version = "4.0", optional = true }
 pollster = "0.2"
-serde = { version = "1.0", features = ["derive"], optional = true }
-serde_json = { version = "1.0", optional = true }
 wgpu = { version = "0.12", default-features = false }
 winit = "0.26"
 
 [features]
-default = ["editor", "ogg", "spirv"]
+default = ["editor", "glsl", "ogg"]
 editor = [
     "dep:egui_wgpu_backend",
     "dep:egui_winit_platform",
     "dep:egui",
     "dep:notify",
-    "dep:serde",
-    "dep:serde_json",
     ]
+glsl = ["wgpu/glsl"]
 ogg = ["dep:lewton"]
-spirv = ["wgpu/spirv"]
