@@ -1,47 +1,26 @@
-use std::time::{Duration, Instant};
+use std::ops::{Add, Sub};
 
-pub trait TimeSource {
-    fn elapsed(&self) -> Duration;
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct Time {
+    frame: u32,
 }
 
-#[derive(Clone)]
-pub struct SeekableTimeSource {
-    base: Instant,
-    offset: Duration,
-    paused: bool,
-}
+impl Add for Time {
+    type Output = Self;
 
-impl TimeSource for SeekableTimeSource {
-    fn elapsed(&self) -> Duration {
-        if self.paused {
-            self.offset
-        } else {
-            self.base.elapsed() + self.offset
+    fn add(self, rhs: Self) -> Self::Output {
+        Time {
+            frame: self.frame + rhs.frame,
         }
     }
 }
 
-impl SeekableTimeSource {
-    pub fn now() -> SeekableTimeSource {
-        SeekableTimeSource {
-            base: Instant::now(),
-            offset: Duration::ZERO,
-            paused: false,
+impl Sub for Time {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Time {
+            frame: self.frame - rhs.frame,
         }
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.paused
-    }
-
-    pub fn set_paused(&mut self, paused: bool) {
-        self.offset = self.elapsed();
-        self.base = Instant::now();
-        self.paused = paused;
-    }
-
-    pub fn seek(&mut self, pos: Duration) {
-        self.offset = pos;
-        self.base = Instant::now();
     }
 }

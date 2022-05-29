@@ -1,66 +1,32 @@
-use std::{sync::{Arc, Mutex}, cmp::min, iter, time::Duration};
+use std::io::Cursor;
 
-use crate::DemoBuilder;
-
-impl DemoBuilder {
+pub enum Music {
+    Pcm(Vec<i16>),
     #[cfg(feature = "ogg")]
-    pub fn with_ogg_music(mut self, data: &[u8], samples_hint: Option<usize>) -> DemoBuilder {
-        let mut cursor = std::io::Cursor::new(data);
-        let mut reader = lewton::inside_ogg::OggStreamReader::new(&mut cursor).unwrap();
-        assert_eq!(2, reader.ident_hdr.audio_channels);
-
-        let mut data = Vec::with_capacity(samples_hint.unwrap_or_default());
-        while let Some(mut pck) = reader.read_dec_packet_itl().unwrap() {
-            data.append(&mut pck);
-        }
-
-        #[cfg(debug_assertions)]
-        println!(
-            "Decoded {} audio samples ({} B)",
-            data.len(),
-            data.len() * std::mem::size_of::<i16>(),
-        );
-
-        self.demo.music = Some(Arc::new(Mutex::new(Music {
-            sample_rate: reader.ident_hdr.audio_sample_rate,
-            data,
-            position: 0,
-            #[cfg(feature = "editor")]
-            paused: false,
-            #[cfg(feature = "editor")]
-            zero: Vec::new(),
-        })));
-        self
-    }
-}
-
-pub struct Music {
-    pub(super) sample_rate: u32,
-    pub(super) data: Vec<i16>,
-    pub(super) position: usize,
-    #[cfg(feature = "editor")]
-    pub(super) paused: bool,
-    #[cfg(feature = "editor")]
-    zero: Vec<i16>,
+    Ogg(&'static [u8]),
 }
 
 impl Music {
-    pub fn read<'a>(&mut self, len: usize) -> &[i16] {
-        #[cfg(feature = "editor")]
-        if self.paused {
-            if self.zero.len() < len {
-                self.zero = iter::repeat(0).take(len).collect();
+    pub(crate) fn decode(&self) -> Vec<i16> {
+        match self {
+            Self::Pcm(data) => data.clone(),
+            #[cfg(feature = "ogg")]
+            Self::Ogg(data) => {
+                use lewton::inside_ogg::OggStreamReader;
+
+                let mut cursor = Cursor::new(data);
+                let mut reader = OggStreamReader::new(&mut cursor).unwrap();
+                assert_eq!(2, reader.ident_hdr.audio_channels);
+                assert_eq!(48000, reader.ident_hdr.audio_sample_rate);
+
+                // Let's do one big allocation up front for 5 minutes of music, to avoid incremental mallocs
+                let mut data = Vec::with_capacity(2 * 48000 * 60 * 5);
+                while let Some(mut pck) = reader.read_dec_packet_itl().unwrap() {
+                    data.append(&mut pck);
+                }
+                data.shrink_to_fit();
+                data
             }
-            return &self.zero;
         }
-
-        let data = &self.data[self.position..self.position + len];
-        self.position += min(self.data.len(), len);
-        data
-    }
-
-    #[cfg(feature = "editor")]
-    pub fn seek(&mut self, position: &Duration) {
-        self.position = (position.as_secs_f32() * self.sample_rate as f32) as usize * 2;
     }
 }
