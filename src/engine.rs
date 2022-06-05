@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use pollster::FutureExt;
 use wgpu::{
     Backends, Color, CommandEncoderDescriptor, DeviceDescriptor, Features, Instance, Limits,
@@ -13,6 +15,11 @@ use winit::{
 };
 
 use crate::{Demo, Fullscreen, Time};
+
+enum State {
+    Warmup(usize),
+    Running,
+}
 
 pub fn run(demo: Demo) {
     let duration: Time = demo
@@ -59,7 +66,8 @@ pub fn run(demo: Demo) {
         },
     );
 
-    let mut t = std::time::Instant::now();
+    let mut state = State::Warmup(0);
+    let mut frame_time = Instant::now();
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -98,11 +106,28 @@ pub fn run(demo: Demo) {
                     });
                 }
 
-                queue.submit(Some(encoder.finish()));
-                frame.present();
+                state = match &state {
+                    State::Warmup(60) | State::Running => {
+                        queue.submit(Some(encoder.finish()));
+                        frame.present();
+                        State::Running
+                    }
+                    State::Warmup(frames) => {
+                        queue.submit(Some(encoder.finish()));
+                        frame.present();
 
-                println!("{:?}", t.elapsed());
-                t = std::time::Instant::now();
+                        if *frames == 59 && !(16..=17).contains(&frame_time.elapsed().as_millis()) {
+                            panic!(
+                                "Output is not 60Hz ({} ms measured)",
+                                frame_time.elapsed().as_millis()
+                            );
+                        }
+
+                        State::Warmup(frames + 1)
+                    }
+                };
+
+                frame_time = Instant::now();
             }
             _ => (),
         }
