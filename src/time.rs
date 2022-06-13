@@ -5,9 +5,15 @@ use std::{
 
 const NANOS_PER_FRAME: u64 = 1_000_000_000 / 60u64;
 
-#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct Time {
     frame: u32,
+}
+
+impl Time {
+    pub(crate) fn from_frame(frame: u32) -> Time {
+        Time { frame }
+    }
 }
 
 impl Add for Time {

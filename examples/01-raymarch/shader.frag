@@ -5,7 +5,7 @@
 // Part of the Raymarching workshop
 // https://github.com/electricsquare/raymarching-workshop
 
-#version 420
+#version 440
 
 layout(std140, binding = 0)
 uniform Uniforms {

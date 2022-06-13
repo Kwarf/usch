@@ -14,14 +14,17 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use crate::{Demo, Fullscreen, Time};
+use crate::{
+    scene::{CompiledScene, UniformsContext},
+    Demo, Fullscreen, Time,
+};
 
 enum State {
-    Warmup(usize),
-    Running,
+    Warmup(u32),
+    Running(u32),
 }
 
-pub fn run(demo: Demo) {
+pub fn run(demo: Demo<'static>) {
     let duration: Time = demo
         .scenes
         .iter()
@@ -42,7 +45,7 @@ pub fn run(demo: Demo) {
         .block_on()
         .unwrap();
 
-    let (device, queue) = adapter
+    let (device, mut queue) = adapter
         .request_device(
             &DeviceDescriptor {
                 label: None,
@@ -54,17 +57,24 @@ pub fn run(demo: Demo) {
         .block_on()
         .unwrap();
 
+    let preferred_format = surface.get_preferred_format(&adapter).unwrap();
     let window_size = window.inner_size();
     surface.configure(
         &device,
         &SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_preferred_format(&adapter).unwrap(),
+            format: preferred_format,
             width: window_size.width,
             height: window_size.height,
             present_mode: PresentMode::Fifo,
         },
     );
+
+    let scenes: Vec<CompiledScene<'_>> = demo
+        .scenes
+        .into_iter()
+        .map(|x| x.compile(&device, preferred_format))
+        .collect();
 
     let mut state = State::Warmup(0);
     let mut frame_time = Instant::now();
@@ -92,7 +102,7 @@ pub fn run(demo: Demo) {
                 let mut encoder =
                     device.create_command_encoder(&CommandEncoderDescriptor::default());
                 {
-                    let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                         label: None,
                         color_attachments: &[RenderPassColorAttachment {
                             view: &view,
@@ -104,18 +114,28 @@ pub fn run(demo: Demo) {
                         }],
                         depth_stencil_attachment: None,
                     });
+
+                    match &state {
+                        State::Running(frames) => {
+                            let time = Time::from_frame(*frames);
+                            match current_scene(&scenes, time) {
+                                Some(scene) => scene.render(
+                                    &UniformsContext { time },
+                                    &mut queue,
+                                    &mut render_pass,
+                                ),
+                                None => *control_flow = ControlFlow::Exit,
+                            }
+                        }
+                        _ => (),
+                    }
                 }
 
-                state = match &state {
-                    State::Warmup(60) | State::Running => {
-                        queue.submit(Some(encoder.finish()));
-                        frame.present();
-                        State::Running
-                    }
-                    State::Warmup(frames) => {
-                        queue.submit(Some(encoder.finish()));
-                        frame.present();
+                queue.submit(Some(encoder.finish()));
+                frame.present();
 
+                state = match &state {
+                    State::Warmup(frames) => {
                         if *frames == 59 && !(16..=17).contains(&frame_time.elapsed().as_millis()) {
                             panic!(
                                 "Output is not 60Hz ({} ms measured)",
@@ -123,8 +143,12 @@ pub fn run(demo: Demo) {
                             );
                         }
 
-                        State::Warmup(frames + 1)
+                        match frames {
+                            60 => State::Running(0),
+                            _ => State::Warmup(frames + 1),
+                        }
                     }
+                    State::Running(frames) => State::Running(frames + 1),
                 };
 
                 frame_time = Instant::now();
@@ -170,4 +194,15 @@ fn fullscreen_mode(event_loop: &EventLoop<()>, demo: &Demo) -> Option<winit::win
             Some(winit::window::Fullscreen::Exclusive(video_mode))
         }
     }
+}
+
+fn current_scene<'a>(scenes: &'a [CompiledScene], mut time: Time) -> Option<&'a CompiledScene<'a>> {
+    for cs in scenes {
+        if time < cs.scene.duration {
+            return Some(&cs);
+        } else {
+            time = time - cs.scene.duration;
+        }
+    }
+    None
 }
