@@ -15,6 +15,7 @@ use winit::{
 };
 
 use crate::{
+    music,
     scene::{CompiledScene, UniformsContext},
     Demo, Fullscreen, Time,
 };
@@ -25,13 +26,6 @@ enum State {
 }
 
 pub fn run(demo: Demo<'static>) {
-    let duration: Time = demo
-        .scenes
-        .iter()
-        .fold(Time::default(), |acc, x| acc + x.duration);
-
-    let music = demo.music.as_ref().map(|x| x.decode());
-
     let (event_loop, window) = create_window(&demo);
     let instance = Instance::new(Backends::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
@@ -69,6 +63,9 @@ pub fn run(demo: Demo<'static>) {
             present_mode: PresentMode::Fifo,
         },
     );
+
+    let music = demo.music.as_ref().map(|x| x.decode());
+    let mut _stream = None;
 
     let scenes: Vec<CompiledScene<'_>> = demo
         .scenes
@@ -144,7 +141,10 @@ pub fn run(demo: Demo<'static>) {
                         }
 
                         match frames {
-                            60 => State::Running(0),
+                            60 => {
+                                _stream = music.clone().map(music::play);
+                                State::Running(0)
+                            }
                             _ => State::Warmup(frames + 1),
                         }
                     }
